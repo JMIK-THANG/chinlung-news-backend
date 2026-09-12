@@ -8,13 +8,22 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
-const allowedOrigins = [
+const allowedOrigins = new Set([
   process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://localhost:5177",
-].filter(Boolean);
+  "https://chinlungtoday.com",
+  "https://www.chinlungtoday.com",
+  "https://news-app-t5rb.onrender.com",
+].filter(Boolean).map((origin) => origin.trim().replace(/\/$/, "")));
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({
+  origin(origin, callback) {
+    const normalizedOrigin = origin?.replace(/\/$/, "");
+    if (!origin || allowedOrigins.has(normalizedOrigin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} is not allowed by CORS.`));
+  },
+}));
 // A modestly larger limit allows the prototype admin to submit a compressed
 // image selected from the computer as a data URL.
 app.use(express.json({ limit: "4mb" }));
