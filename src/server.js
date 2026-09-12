@@ -14,7 +14,9 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins }));
-app.use(express.json({ limit: "1mb" }));
+// A modestly larger limit allows the prototype admin to submit a compressed
+// image selected from the computer as a data URL.
+app.use(express.json({ limit: "4mb" }));
 
 app.get("/api/health", async (_req, res, next) => {
   try {

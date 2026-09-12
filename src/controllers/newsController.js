@@ -118,6 +118,82 @@ export async function getNews(req, res, next) {
   }
 }
 
+export async function getAdminNews(_req, res, next) {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM news_articles ORDER BY created_at DESC LIMIT 100",
+    );
+    res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateNews(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const {
+      title, summary, content, category, author, imageUrl = null,
+      imageAlt = null, status = "published", isTopStory = false,
+    } = req.body;
+
+    if (!Number.isInteger(id) || !title || !summary || !content || !category || !author) {
+      return res.status(400).json({ message: "A valid article and all required fields are needed." });
+    }
+    if (!allowedCategories.includes(category)) {
+      return res.status(400).json({ message: `Category must be one of: ${allowedCategories.join(", ")}` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (isTopStory) {
+        await client.query("UPDATE news_articles SET is_top_story = FALSE WHERE is_top_story = TRUE AND id <> $1", [id]);
+      }
+      const result = await client.query(
+        `UPDATE news_articles SET
+          title = $1, summary = $2, content = $3, category = $4,
+          author = $5, image_url = $6, image_alt = $7, status = $8,
+          is_top_story = $9,
+          published_at = CASE
+            WHEN $8 = 'published' AND published_at IS NULL THEN NOW()
+            WHEN $8 = 'draft' THEN NULL
+            ELSE published_at
+          END,
+          updated_at = NOW()
+        WHERE id = $10 RETURNING *`,
+        [title, summary, content, category, author, imageUrl, imageAlt, status, isTopStory, id],
+      );
+      if (!result.rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "News article not found." });
+      }
+      await client.query("COMMIT");
+      res.json(result.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteNews(req, res, next) {
+  try {
+    const result = await pool.query(
+      "DELETE FROM news_articles WHERE id = $1 RETURNING id",
+      [req.params.id],
+    );
+    if (!result.rows[0]) return res.status(404).json({ message: "News article not found." });
+    res.json({ message: "News article deleted." });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getNewsBySlug(req, res, next) {
   try {
     const result = await pool.query(
