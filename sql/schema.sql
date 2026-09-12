@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
   ),
   author VARCHAR(100) NOT NULL,
   image_url TEXT,
+  image_public_id TEXT,
   image_alt VARCHAR(250),
   status VARCHAR(20) NOT NULL DEFAULT 'published' CHECK (
     status IN ('draft', 'published')
@@ -25,6 +26,9 @@ CREATE TABLE IF NOT EXISTS news_articles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE news_articles
+  ADD COLUMN IF NOT EXISTS image_public_id TEXT;
 
 CREATE INDEX IF NOT EXISTS news_articles_published_at_index
   ON news_articles (published_at DESC);

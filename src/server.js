@@ -4,6 +4,7 @@ import express from "express";
 import pool from "./db.js";
 import newsRoutes from "./routes/newsRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -28,6 +29,7 @@ app.get("/api/health", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/uploads", uploadRoutes);
 app.use("/api/news", newsRoutes);
 
 app.use((error, _req, res, _next) => {

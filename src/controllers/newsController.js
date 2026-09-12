@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import cloudinary, { cloudinaryIsConfigured } from "../config/cloudinary.js";
 
 const allowedCategories = [
   "Chin News",
@@ -25,6 +26,7 @@ export async function createNews(req, res, next) {
       category,
       author,
       imageUrl = null,
+      imagePublicId = null,
       imageAlt = null,
       status = "published",
       isTopStory = false,
@@ -59,9 +61,9 @@ export async function createNews(req, res, next) {
       const result = await client.query(
         `INSERT INTO news_articles (
           slug, title, summary, content, category, author,
-          image_url, image_alt, status, is_top_story, published_at
+          image_url, image_public_id, image_alt, status, is_top_story, published_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *`,
         [
           slug,
@@ -71,6 +73,7 @@ export async function createNews(req, res, next) {
           category,
           author,
           imageUrl,
+          imagePublicId,
           imageAlt,
           status,
           isTopStory,
@@ -134,7 +137,7 @@ export async function updateNews(req, res, next) {
     const id = Number(req.params.id);
     const {
       title, summary, content, category, author, imageUrl = null,
-      imageAlt = null, status = "published", isTopStory = false,
+      imagePublicId = null, imageAlt = null, status = "published", isTopStory = false,
     } = req.body;
 
     if (!Number.isInteger(id) || !title || !summary || !content || !category || !author) {
@@ -151,7 +154,7 @@ export async function updateNews(req, res, next) {
     try {
       await client.query("BEGIN");
       const existingResult = await client.query(
-        "SELECT published_at FROM news_articles WHERE id = $1 FOR UPDATE",
+        "SELECT published_at, image_public_id FROM news_articles WHERE id = $1 FOR UPDATE",
         [id],
       );
       if (!existingResult.rows[0]) {
@@ -168,13 +171,17 @@ export async function updateNews(req, res, next) {
       const result = await client.query(
         `UPDATE news_articles SET
           title = $1, summary = $2, content = $3, category = $4,
-          author = $5, image_url = $6, image_alt = $7, status = $8,
-          is_top_story = $9, published_at = $10,
+          author = $5, image_url = $6, image_public_id = $7,
+          image_alt = $8, status = $9, is_top_story = $10, published_at = $11,
           updated_at = NOW()
-        WHERE id = $11 RETURNING *`,
-        [title, summary, content, category, author, imageUrl, imageAlt, status, isTopStory, publishedAt, id],
+        WHERE id = $12 RETURNING *`,
+        [title, summary, content, category, author, imageUrl, imagePublicId, imageAlt, status, isTopStory, publishedAt, id],
       );
       await client.query("COMMIT");
+      const previousImageId = existingResult.rows[0].image_public_id;
+      if (previousImageId && previousImageId !== imagePublicId && cloudinaryIsConfigured()) {
+        cloudinary.uploader.destroy(previousImageId).catch((error) => console.error("Old image cleanup failed:", error.message));
+      }
       res.json(result.rows[0]);
     } catch (error) {
       await client.query("ROLLBACK");
@@ -190,10 +197,14 @@ export async function updateNews(req, res, next) {
 export async function deleteNews(req, res, next) {
   try {
     const result = await pool.query(
-      "DELETE FROM news_articles WHERE id = $1 RETURNING id",
+      "DELETE FROM news_articles WHERE id = $1 RETURNING id, image_public_id",
       [req.params.id],
     );
     if (!result.rows[0]) return res.status(404).json({ message: "News article not found." });
+    if (result.rows[0].image_public_id && cloudinaryIsConfigured()) {
+      cloudinary.uploader.destroy(result.rows[0].image_public_id)
+        .catch((error) => console.error("Deleted image cleanup failed:", error.message));
+    }
     res.json({ message: "News article deleted." });
   } catch (error) {
     next(error);
