@@ -59,6 +59,16 @@ After running `sql/schema.sql` again so the `admin_users` table exists, run:
 npm run create-admin
 ```
 
+## Render
+
+Create a Render PostgreSQL database, then deploy this repository as a Web
+Service. Use `npm install` as the build command and `npm run render-start` as
+the start command. The Render start command creates any missing tables,
+creates or updates the configured admin account, and starts the API.
+
+Set `DATABASE_URL`, `FRONTEND_URL`, `JWT_SECRET`, `ADMIN_NAME`, `ADMIN_EMAIL`,
+and `ADMIN_PASSWORD` in the Render dashboard. Do not upload the local `.env`.
+
 The script reads the admin name, email, and password from `.env`, hashes the password, and saves the administrator separately from public users.
 
 ## 5. Install and run

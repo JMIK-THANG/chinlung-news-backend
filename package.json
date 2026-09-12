@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "init-db": "node scripts/initDatabase.js",
+    "render-start": "npm run init-db && npm run create-admin && npm start",
     "setup-db": "node scripts/setupDatabase.js",
     "create-admin": "node scripts/createAdmin.js"
   },
