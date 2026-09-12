@@ -143,31 +143,37 @@ export async function updateNews(req, res, next) {
     if (!allowedCategories.includes(category)) {
       return res.status(400).json({ message: `Category must be one of: ${allowedCategories.join(", ")}` });
     }
+    if (!["published", "draft"].includes(status)) {
+      return res.status(400).json({ message: "Status must be published or draft." });
+    }
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      const existingResult = await client.query(
+        "SELECT published_at FROM news_articles WHERE id = $1 FOR UPDATE",
+        [id],
+      );
+      if (!existingResult.rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "News article not found." });
+      }
+
       if (isTopStory) {
         await client.query("UPDATE news_articles SET is_top_story = FALSE WHERE is_top_story = TRUE AND id <> $1", [id]);
       }
+      const publishedAt = status === "published"
+        ? existingResult.rows[0].published_at || new Date()
+        : null;
       const result = await client.query(
         `UPDATE news_articles SET
           title = $1, summary = $2, content = $3, category = $4,
           author = $5, image_url = $6, image_alt = $7, status = $8,
-          is_top_story = $9,
-          published_at = CASE
-            WHEN $8 = 'published' AND published_at IS NULL THEN NOW()
-            WHEN $8 = 'draft' THEN NULL
-            ELSE published_at
-          END,
+          is_top_story = $9, published_at = $10,
           updated_at = NOW()
-        WHERE id = $10 RETURNING *`,
-        [title, summary, content, category, author, imageUrl, imageAlt, status, isTopStory, id],
+        WHERE id = $11 RETURNING *`,
+        [title, summary, content, category, author, imageUrl, imageAlt, status, isTopStory, publishedAt, id],
       );
-      if (!result.rows[0]) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "News article not found." });
-      }
       await client.query("COMMIT");
       res.json(result.rows[0]);
     } catch (error) {
