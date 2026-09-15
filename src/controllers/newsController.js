@@ -230,3 +230,31 @@ export async function getNewsBySlug(req, res, next) {
     next(error);
   }
 }
+
+export async function getRelatedNews(req, res, next) {
+  try {
+    const currentResult = await pool.query(
+      "SELECT id, category FROM news_articles WHERE slug = $1 AND status = 'published'",
+      [req.params.slug],
+    );
+    const currentArticle = currentResult.rows[0];
+
+    if (!currentArticle) {
+      return res.status(404).json({ message: "News article not found." });
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM news_articles
+       WHERE status = 'published' AND id <> $1
+       ORDER BY
+         CASE WHEN category = $2 THEN 0 ELSE 1 END,
+         published_at DESC NULLS LAST
+       LIMIT 3`,
+      [currentArticle.id, currentArticle.category],
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+}
