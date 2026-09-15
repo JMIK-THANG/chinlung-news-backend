@@ -121,12 +121,56 @@ export async function getNews(req, res, next) {
   }
 }
 
-export async function getAdminNews(_req, res, next) {
+export async function getAdminNews(req, res, next) {
   try {
-    const result = await pool.query(
-      "SELECT * FROM news_articles ORDER BY created_at DESC LIMIT 100",
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
+    const search = String(req.query.search || "").trim();
+    const sort = String(req.query.sort || "newest");
+    const orderBy = {
+      newest: "created_at DESC",
+      oldest: "created_at ASC",
+      az: "LOWER(title) ASC",
+      za: "LOWER(title) DESC",
+    }[sort] || "created_at DESC";
+    const values = [];
+    let where = "";
+
+    if (search) {
+      values.push(`%${search}%`);
+      where = `WHERE title ILIKE $${values.length}`;
+    }
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM news_articles ${where}`,
+      values,
     );
-    res.json(result.rows);
+    values.push(limit, (page - 1) * limit);
+    const result = await pool.query(
+      `SELECT * FROM news_articles
+       ${where}
+       ORDER BY ${orderBy}
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+
+    res.json({
+      articles: result.rows,
+      page,
+      limit,
+      total: countResult.rows[0].total,
+      totalPages: Math.max(1, Math.ceil(countResult.rows[0].total / limit)),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAdminNewsById(req, res, next) {
+  try {
+    const result = await pool.query("SELECT * FROM news_articles WHERE id = $1", [req.params.id]);
+    if (!result.rows[0]) return res.status(404).json({ message: "News article not found." });
+    res.json(result.rows[0]);
   } catch (error) {
     next(error);
   }

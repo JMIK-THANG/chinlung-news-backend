@@ -3,6 +3,7 @@ import {
   createNews,
   deleteNews,
   getAdminNews,
+  getAdminNewsById,
   getNews,
   getNewsBySlug,
   getRelatedNews,
@@ -14,6 +15,7 @@ const router = Router();
 
 router.get("/", getNews);
 router.get("/admin/all", requireAdmin, getAdminNews);
+router.get("/admin/:id", requireAdmin, getAdminNewsById);
 router.get("/:slug/related", getRelatedNews);
 router.get("/:slug", getNewsBySlug);
 router.post("/", requireAdmin, createNews);
