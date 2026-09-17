@@ -30,6 +30,7 @@ export async function createNews(req, res, next) {
       imageAlt = null,
       status = "published",
       isTopStory = false,
+      contentType = "news",
     } = req.body;
 
     if (!title || !summary || !content || !category || !author) {
@@ -43,6 +44,7 @@ export async function createNews(req, res, next) {
         message: `Category must be one of: ${allowedCategories.join(", ")}`,
       });
     }
+    if (!["news", "article"].includes(contentType)) return res.status(400).json({ message: "Publication type must be news or article." });
 
     const slug = `${makeSlug(title)}-${Date.now()}`;
     const publishedAt = status === "published" ? new Date() : null;
@@ -61,9 +63,9 @@ export async function createNews(req, res, next) {
       const result = await client.query(
         `INSERT INTO news_articles (
           slug, title, summary, content, category, author,
-          image_url, image_public_id, image_alt, status, is_top_story, published_at
+          image_url, image_public_id, image_alt, status, is_top_story, published_at, content_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
         [
           slug,
@@ -78,6 +80,7 @@ export async function createNews(req, res, next) {
           status,
           isTopStory,
           publishedAt,
+          contentType,
         ],
       );
 
@@ -98,8 +101,14 @@ export async function getNews(req, res, next) {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const category = req.query.category;
+    const contentType = req.query.type || "news";
     const values = [];
     let where = "WHERE status = 'published'";
+
+    if (["news", "article"].includes(contentType)) {
+      values.push(contentType);
+      where += ` AND content_type = $${values.length}`;
+    }
 
     if (category) {
       values.push(category);
@@ -181,7 +190,7 @@ export async function updateNews(req, res, next) {
     const id = Number(req.params.id);
     const {
       title, summary, content, category, author, imageUrl = null,
-      imagePublicId = null, imageAlt = null, status = "published", isTopStory = false,
+      imagePublicId = null, imageAlt = null, status = "published", isTopStory = false, contentType = "news",
     } = req.body;
 
     if (!Number.isInteger(id) || !title || !summary || !content || !category || !author) {
@@ -193,6 +202,7 @@ export async function updateNews(req, res, next) {
     if (!["published", "draft"].includes(status)) {
       return res.status(400).json({ message: "Status must be published or draft." });
     }
+    if (!["news", "article"].includes(contentType)) return res.status(400).json({ message: "Publication type must be news or article." });
 
     const client = await pool.connect();
     try {
@@ -216,10 +226,10 @@ export async function updateNews(req, res, next) {
         `UPDATE news_articles SET
           title = $1, summary = $2, content = $3, category = $4,
           author = $5, image_url = $6, image_public_id = $7,
-          image_alt = $8, status = $9, is_top_story = $10, published_at = $11,
+          image_alt = $8, status = $9, is_top_story = $10, published_at = $11, content_type = $12,
           updated_at = NOW()
-        WHERE id = $12 RETURNING *`,
-        [title, summary, content, category, author, imageUrl, imagePublicId, imageAlt, status, isTopStory, publishedAt, id],
+        WHERE id = $13 RETURNING *`,
+        [title, summary, content, category, author, imageUrl, imagePublicId, imageAlt, status, isTopStory, publishedAt, contentType, id],
       );
       await client.query("COMMIT");
       const previousImageId = existingResult.rows[0].image_public_id;

@@ -5,6 +5,7 @@ import pool from "./db.js";
 import newsRoutes from "./routes/newsRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import explainerRoutes from "./routes/explainerRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -40,6 +41,7 @@ app.get("/api/health", async (_req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/news", newsRoutes);
+app.use("/api/explainers", explainerRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);

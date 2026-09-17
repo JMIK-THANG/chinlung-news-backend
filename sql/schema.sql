@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
     status IN ('draft', 'published')
   ),
   is_top_story BOOLEAN NOT NULL DEFAULT FALSE,
+  content_type VARCHAR(20) NOT NULL DEFAULT 'news' CHECK (content_type IN ('news', 'article')),
   views INTEGER NOT NULL DEFAULT 0,
   published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -29,6 +30,9 @@ CREATE TABLE IF NOT EXISTS news_articles (
 
 ALTER TABLE news_articles
   ADD COLUMN IF NOT EXISTS image_public_id TEXT;
+
+ALTER TABLE news_articles
+  ADD COLUMN IF NOT EXISTS content_type VARCHAR(20) NOT NULL DEFAULT 'news';
 
 CREATE INDEX IF NOT EXISTS news_articles_published_at_index
   ON news_articles (published_at DESC);
@@ -44,3 +48,24 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS explainers (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  slug VARCHAR(180) UNIQUE NOT NULL,
+  source_article_id INTEGER REFERENCES news_articles(id) ON DELETE SET NULL,
+  question VARCHAR(250) NOT NULL,
+  category VARCHAR(40) NOT NULL,
+  read_time VARCHAR(30) NOT NULL DEFAULT '5 min read',
+  introduction TEXT NOT NULL,
+  takeaway TEXT NOT NULL,
+  what_happened TEXT NOT NULL,
+  why_it_matters TEXT NOT NULL,
+  what_to_watch TEXT NOT NULL,
+  sections JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+  is_featured BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS explainers_featured_index ON explainers (is_featured);
