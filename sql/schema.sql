@@ -75,3 +75,23 @@ CREATE TABLE IF NOT EXISTS explainers (
 );
 
 CREATE INDEX IF NOT EXISTS explainers_featured_index ON explainers (is_featured);
+
+UPDATE news_articles SET
+  title = REPLACE(REPLACE(REPLACE(title, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  summary = REPLACE(REPLACE(REPLACE(summary, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  content = REPLACE(REPLACE(REPLACE(content, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  image_alt = REPLACE(REPLACE(REPLACE(image_alt, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong')
+WHERE title ILIKE '%holh%' OR summary ILIKE '%holh%' OR content ILIKE '%holh%' OR image_alt ILIKE '%holh%';
+
+UPDATE explainers SET
+  question = REPLACE(REPLACE(REPLACE(question, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  introduction = REPLACE(REPLACE(REPLACE(introduction, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  takeaway = REPLACE(REPLACE(REPLACE(takeaway, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  what_happened = REPLACE(REPLACE(REPLACE(what_happened, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  why_it_matters = REPLACE(REPLACE(REPLACE(why_it_matters, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  what_to_watch = REPLACE(REPLACE(REPLACE(what_to_watch, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
+  sections = REPLACE(REPLACE(REPLACE(sections::text, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong')::jsonb,
+  sources = REPLACE(REPLACE(REPLACE(sources::text, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong')::jsonb
+WHERE question ILIKE '%holh%' OR introduction ILIKE '%holh%' OR takeaway ILIKE '%holh%'
+  OR what_happened ILIKE '%holh%' OR why_it_matters ILIKE '%holh%' OR what_to_watch ILIKE '%holh%'
+  OR sections::text ILIKE '%holh%' OR sources::text ILIKE '%holh%';
