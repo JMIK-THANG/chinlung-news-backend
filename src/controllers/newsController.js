@@ -31,6 +31,7 @@ export async function createNews(req, res, next) {
       imageAlt = null,
       status = "published",
       isTopStory = false,
+      isEditorPick = false,
       contentType = "news",
     } = req.body;
 
@@ -61,12 +62,22 @@ export async function createNews(req, res, next) {
         );
       }
 
+      const editorPick = contentType === "news" && Boolean(isEditorPick);
+      if (editorPick) {
+        await client.query("SELECT pg_advisory_xact_lock(20260917)");
+        const countResult = await client.query("SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE");
+        if (countResult.rows[0].total >= 4) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
+        }
+      }
+
       const result = await client.query(
         `INSERT INTO news_articles (
           slug, title, summary, content, category, author,
-          image_url, image_public_id, image_alt, status, is_top_story, published_at, content_type
+          image_url, image_public_id, image_alt, status, is_top_story, is_editor_pick, published_at, content_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *`,
         [
           slug,
@@ -80,6 +91,7 @@ export async function createNews(req, res, next) {
           imageAlt,
           status,
           isTopStory,
+          editorPick,
           publishedAt,
           contentType,
         ],
@@ -245,7 +257,7 @@ export async function updateNews(req, res, next) {
     const id = Number(req.params.id);
     const {
       title, summary, content, category, author, imageUrl = null,
-      imagePublicId = null, imageAlt = null, status = "published", isTopStory = false, contentType = "news",
+      imagePublicId = null, imageAlt = null, status = "published", isTopStory = false, isEditorPick = false, contentType = "news",
     } = req.body;
 
     if (!Number.isInteger(id) || !title || !summary || !content || !category || !author) {
@@ -263,7 +275,7 @@ export async function updateNews(req, res, next) {
     try {
       await client.query("BEGIN");
       const existingResult = await client.query(
-        "SELECT published_at, image_public_id FROM news_articles WHERE id = $1 FOR UPDATE",
+        "SELECT published_at, image_public_id, is_editor_pick FROM news_articles WHERE id = $1 FOR UPDATE",
         [id],
       );
       if (!existingResult.rows[0]) {
@@ -274,6 +286,15 @@ export async function updateNews(req, res, next) {
       if (isTopStory) {
         await client.query("UPDATE news_articles SET is_top_story = FALSE WHERE is_top_story = TRUE AND id <> $1", [id]);
       }
+      const editorPick = contentType === "news" && Boolean(isEditorPick);
+      if (editorPick && !existingResult.rows[0].is_editor_pick) {
+        await client.query("SELECT pg_advisory_xact_lock(20260917)");
+        const countResult = await client.query("SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE");
+        if (countResult.rows[0].total >= 4) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
+        }
+      }
       const publishedAt = status === "published"
         ? existingResult.rows[0].published_at || new Date()
         : null;
@@ -281,10 +302,10 @@ export async function updateNews(req, res, next) {
         `UPDATE news_articles SET
           title = $1, summary = $2, content = $3, category = $4,
           author = $5, image_url = $6, image_public_id = $7,
-          image_alt = $8, status = $9, is_top_story = $10, published_at = $11, content_type = $12,
+          image_alt = $8, status = $9, is_top_story = $10, is_editor_pick = $11, published_at = $12, content_type = $13,
           updated_at = NOW()
-        WHERE id = $13 RETURNING *`,
-        [title, summary, content, category, author, imageUrl, imagePublicId, imageAlt, status, isTopStory, publishedAt, contentType, id],
+        WHERE id = $14 RETURNING *`,
+        [title, summary, content, category, author, imageUrl, imagePublicId, imageAlt, status, isTopStory, editorPick, publishedAt, contentType, id],
       );
       await client.query("COMMIT");
       const previousImageId = existingResult.rows[0].image_public_id;

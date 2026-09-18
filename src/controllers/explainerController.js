@@ -39,10 +39,13 @@ export async function saveExplainer(req, res, next) {
   try {
     if (!validate(req.body)) return res.status(400).json({ message: "Please complete every required explainer field." });
     const {
-      id, question, category, readTime = "5 min read", introduction, takeaway,
+      id, question, category, introduction, takeaway,
       whatHappened, whyItMatters, whatToWatch, sections = [], sources = [],
       sourceArticleId = null, isFeatured = true,
     } = req.body;
+    const readingText = [introduction, takeaway, whatHappened, whyItMatters, whatToWatch, ...sections.flatMap((section) => section.paragraphs || [])].join(" ");
+    const wordCount = readingText.trim().split(/\s+/).filter(Boolean).length;
+    const readTime = `${Math.max(1, Math.ceil(wordCount / 220))} min read`;
     const slug = `${makeSlug(question)}-${id || Date.now()}`;
     const client = await pool.connect();
     try {
