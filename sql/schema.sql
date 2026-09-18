@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
     status IN ('draft', 'published')
   ),
   is_top_story BOOLEAN NOT NULL DEFAULT FALSE,
+  is_editor_pick BOOLEAN NOT NULL DEFAULT FALSE,
   content_type VARCHAR(20) NOT NULL DEFAULT 'news' CHECK (content_type IN ('news', 'article')),
   views INTEGER NOT NULL DEFAULT 0,
   published_at TIMESTAMPTZ,
@@ -34,6 +35,12 @@ ALTER TABLE news_articles
 
 ALTER TABLE news_articles
   ADD COLUMN IF NOT EXISTS content_type VARCHAR(20) NOT NULL DEFAULT 'news';
+
+ALTER TABLE news_articles
+  ADD COLUMN IF NOT EXISTS is_editor_pick BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS news_articles_editor_pick_index
+  ON news_articles (is_editor_pick, published_at DESC);
 
 ALTER TABLE news_articles DROP CONSTRAINT IF EXISTS news_articles_category_check;
 ALTER TABLE news_articles ADD CONSTRAINT news_articles_category_check CHECK (

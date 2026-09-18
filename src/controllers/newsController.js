@@ -186,6 +186,60 @@ export async function getAdminNewsById(req, res, next) {
   }
 }
 
+export async function updateEditorPick(req, res, next) {
+  const id = Number(req.params.id);
+  const isEditorPick = req.body.isEditorPick;
+
+  if (!Number.isInteger(id) || typeof isEditorPick !== "boolean") {
+    return res.status(400).json({ message: "A valid article and selection are required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existingResult = await client.query(
+      "SELECT id, status, content_type, is_editor_pick FROM news_articles WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const article = existingResult.rows[0];
+
+    if (!article) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "News article not found." });
+    }
+    if (isEditorPick && (article.status !== "published" || article.content_type !== "news")) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "Only published news can be added to Editor’s Picks." });
+    }
+
+    if (isEditorPick && !article.is_editor_pick) {
+      await client.query("SELECT pg_advisory_xact_lock(20260917)");
+      const countResult = await client.query(
+        "SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE",
+      );
+      if (countResult.rows[0].total >= 4) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
+      }
+    }
+
+    const result = await client.query(
+      `UPDATE news_articles
+       SET is_editor_pick = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [isEditorPick, id],
+    );
+    await client.query("COMMIT");
+    res.json(result.rows[0]);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    next(error);
+  } finally {
+    client.release();
+  }
+}
+
 export async function updateNews(req, res, next) {
   try {
     const id = Number(req.params.id);
