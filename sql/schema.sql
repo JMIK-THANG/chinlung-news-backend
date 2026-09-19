@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS news_articles (
       'International News',
       'Sports',
       'Business',
-      'Articles'
+      'Articles',
+      'News Article',
+      'Cahram'
     )
   ),
   author VARCHAR(100) NOT NULL,
@@ -44,7 +46,7 @@ CREATE INDEX IF NOT EXISTS news_articles_editor_pick_index
 
 ALTER TABLE news_articles DROP CONSTRAINT IF EXISTS news_articles_category_check;
 ALTER TABLE news_articles ADD CONSTRAINT news_articles_category_check CHECK (
-  category IN ('Chin News', 'Myanmar News', 'International News', 'Sports', 'Business', 'Articles')
+  category IN ('Chin News', 'Myanmar News', 'International News', 'Sports', 'Business', 'Articles', 'News Article', 'Cahram')
 );
 
 CREATE INDEX IF NOT EXISTS news_articles_published_at_index
