@@ -7,6 +7,7 @@ const allowedCategories = [
   "International News",
   "Sports",
   "Business",
+  "Editorial",
   "Articles",
   "News Article",
   "Cahram",
