@@ -8,6 +8,8 @@ const allowedCategories = [
   "Sports",
   "Business",
   "Articles",
+  "News Article",
+  "Cahram",
 ];
 
 function makeSlug(title) {
