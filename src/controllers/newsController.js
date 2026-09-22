@@ -334,7 +334,7 @@ export async function getNewsBySlug(req, res, next) {
     const result = await pool.query(
       `UPDATE news_articles
        SET views = views + 1, updated_at = NOW()
-       WHERE slug = $1 AND status = 'published'
+       WHERE (slug = $1 OR id::text = $1) AND status = 'published'
        RETURNING *`,
       [req.params.slug],
     );
@@ -352,7 +352,7 @@ export async function getNewsBySlug(req, res, next) {
 export async function getRelatedNews(req, res, next) {
   try {
     const currentResult = await pool.query(
-      "SELECT id, category FROM news_articles WHERE slug = $1 AND status = 'published'",
+      "SELECT id, category FROM news_articles WHERE (slug = $1 OR id::text = $1) AND status = 'published'",
       [req.params.slug],
     );
     const currentArticle = currentResult.rows[0];
