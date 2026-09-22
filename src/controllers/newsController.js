@@ -14,11 +14,23 @@ const allowedCategories = [
 ];
 
 function makeSlug(title) {
-  return title
+  const normalized = title
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+  return normalized.split("-").filter(Boolean).slice(0, 8).join("-").slice(0, 64).replace(/-$/g, "") || "story";
+}
+
+async function makeUniqueSlug(client, title) {
+  const base = makeSlug(title);
+  let slug = base;
+  let suffix = 2;
+  while ((await client.query("SELECT 1 FROM news_articles WHERE slug = $1 LIMIT 1", [slug])).rowCount > 0) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return slug;
 }
 
 export async function createNews(req, res, next) {
@@ -51,13 +63,13 @@ export async function createNews(req, res, next) {
     }
     if (!["news", "article"].includes(contentType)) return res.status(400).json({ message: "Publication type must be news or article." });
 
-    const slug = `${makeSlug(title)}-${Date.now()}`;
     const publishedAt = status === "published" ? new Date() : null;
 
     const client = await pool.connect();
 
     try {
       await client.query("BEGIN");
+      const slug = await makeUniqueSlug(client, title);
 
       if (isTopStory) {
         await client.query(
@@ -66,14 +78,6 @@ export async function createNews(req, res, next) {
       }
 
       const editorPick = contentType === "news" && Boolean(isEditorPick);
-      if (editorPick) {
-        await client.query("SELECT pg_advisory_xact_lock(20260917)");
-        const countResult = await client.query("SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE");
-        if (countResult.rows[0].total >= 4) {
-          await client.query("ROLLBACK");
-          return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
-        }
-      }
 
       const result = await client.query(
         `INSERT INTO news_articles (
@@ -227,17 +231,6 @@ export async function updateEditorPick(req, res, next) {
       return res.status(400).json({ message: "Only published news can be added to Editor’s Picks." });
     }
 
-    if (isEditorPick && !article.is_editor_pick) {
-      await client.query("SELECT pg_advisory_xact_lock(20260917)");
-      const countResult = await client.query(
-        "SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE",
-      );
-      if (countResult.rows[0].total >= 4) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
-      }
-    }
-
     const result = await client.query(
       `UPDATE news_articles
        SET is_editor_pick = $1, updated_at = NOW()
@@ -290,14 +283,6 @@ export async function updateNews(req, res, next) {
         await client.query("UPDATE news_articles SET is_top_story = FALSE WHERE is_top_story = TRUE AND id <> $1", [id]);
       }
       const editorPick = contentType === "news" && Boolean(isEditorPick);
-      if (editorPick && !existingResult.rows[0].is_editor_pick) {
-        await client.query("SELECT pg_advisory_xact_lock(20260917)");
-        const countResult = await client.query("SELECT COUNT(*)::int AS total FROM news_articles WHERE is_editor_pick = TRUE");
-        if (countResult.rows[0].total >= 4) {
-          await client.query("ROLLBACK");
-          return res.status(409).json({ message: "Editor’s Picks already has the maximum of 4 stories. Remove one first." });
-        }
-      }
       const publishedAt = status === "published"
         ? existingResult.rows[0].published_at || new Date()
         : null;
