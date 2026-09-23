@@ -331,12 +331,14 @@ export async function deleteNews(req, res, next) {
 
 export async function getNewsBySlug(req, res, next) {
   try {
+    const compactId = req.params.slug.match(/-p(\d+)$/)?.[1];
+    const identifier = compactId || req.params.slug;
     const result = await pool.query(
       `UPDATE news_articles
        SET views = views + 1, updated_at = NOW()
        WHERE (slug = $1 OR id::text = $1) AND status = 'published'
        RETURNING *`,
-      [req.params.slug],
+      [identifier],
     );
 
     if (result.rows.length === 0) {
@@ -351,9 +353,11 @@ export async function getNewsBySlug(req, res, next) {
 
 export async function getRelatedNews(req, res, next) {
   try {
+    const compactId = req.params.slug.match(/-p(\d+)$/)?.[1];
+    const identifier = compactId || req.params.slug;
     const currentResult = await pool.query(
       "SELECT id, category FROM news_articles WHERE (slug = $1 OR id::text = $1) AND status = 'published'",
-      [req.params.slug],
+      [identifier],
     );
     const currentArticle = currentResult.rows[0];
 
