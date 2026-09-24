@@ -101,10 +101,9 @@ app.get("/share/:kind/:id", async (req, res, next) => {
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
 <meta name="twitter:image" content="${escapeHtml(image)}">
-<link rel="canonical" href="${escapeHtml(destination)}">
-<meta http-equiv="refresh" content="0;url=${escapeHtml(destination)}">
 </head><body><p>Opening <a href="${escapeHtml(destination)}">${title}</a>…</p>
-<script>window.location.replace(${JSON.stringify(destination)});</script></body></html>`);
+<script>window.location.replace(${JSON.stringify(destination)});</script>
+<noscript><p><a href="${escapeHtml(destination)}">Read this story on Chinlung Today</a></p></noscript></body></html>`);
   } catch (error) {
     next(error);
   }
