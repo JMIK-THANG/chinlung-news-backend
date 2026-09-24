@@ -60,13 +60,25 @@ const getPublishedStory = async (id, contentType) => {
 
 const publicStoryUrl = (story) => `${publicSiteUrl}/${story.content_type === "article" ? "articles" : "news"}/${story.id}`;
 
+const socialImageUrl = (imageUrl) => {
+  if (!imageUrl?.startsWith("http")) return `${publicSiteUrl}/chinlung-today-logo.png`;
+  if (!imageUrl.includes("res.cloudinary.com") || !imageUrl.includes("/image/upload/")) return imageUrl;
+  return imageUrl.replace(
+    "/image/upload/",
+    "/image/upload/c_fill,g_auto,w_1200,h_630,f_jpg,q_auto/",
+  );
+};
+
 const storyMetadata = (story) => {
   const canonicalUrl = publicStoryUrl(story);
   const title = escapeHtml(story.title);
   const description = escapeHtml(story.summary || story.title);
-  const image = story.image_url?.startsWith("http")
-    ? story.image_url
-    : `${publicSiteUrl}/chinlung-today-logo.png`;
+  const image = socialImageUrl(story.image_url);
+  const cloudinaryImageMetadata = image.includes("res.cloudinary.com")
+    ? `<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">`
+    : "";
 
   return `<title>${title} | Chinlung Today</title>
 <meta name="description" content="${description}">
@@ -77,6 +89,7 @@ const storyMetadata = (story) => {
 <meta property="og:description" content="${description}">
 <meta property="og:image" content="${escapeHtml(image)}">
 <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+${cloudinaryImageMetadata}
 <meta property="og:image:alt" content="${title}">
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta name="twitter:card" content="summary_large_image">
