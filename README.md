@@ -49,6 +49,11 @@ ADMIN_PASSWORD=replace_this_with_a_strong_password
 
 If Vite runs on another port, such as `5177`, use that address for `FRONTEND_URL`.
 
+Production social metadata uses `https://chinlungtoday.com` by default. You can
+set `PUBLIC_SITE_URL` to override that canonical public origin and
+`FRONTEND_SHELL_URL` if the frontend HTML shell is served from a different
+origin. Neither setting changes the API URL used by the frontend.
+
 Never commit `.env` because it contains your database password.
 
 ## 4. Create your first admin

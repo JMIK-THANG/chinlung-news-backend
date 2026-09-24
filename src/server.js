@@ -16,7 +16,6 @@ const allowedOrigins = new Set([
   "http://localhost:5177",
   "https://chinlungtoday.com",
   "https://www.chinlungtoday.com",
-  "https://news-app-t5rb.onrender.com",
 ].filter(Boolean).map((origin) => origin.trim().replace(/\/$/, "")));
 
 app.use(cors({
@@ -46,61 +45,92 @@ const escapeHtml = (value = "") => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
-app.get("/share/:kind/:id", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    const contentType = req.params.kind === "a" ? "article" : "news";
-    if (!Number.isInteger(id) || id < 1) return res.status(404).send("Story not found.");
+const publicSiteUrl = (process.env.PUBLIC_SITE_URL || "https://chinlungtoday.com").replace(/\/$/, "");
 
-    const result = await pool.query(
-      `SELECT id, slug, title, summary, image_url, content_type
-       FROM news_articles
-       WHERE id = $1 AND content_type = $2 AND status = 'published'
-       LIMIT 1`,
-      [id, contentType],
-    );
-    const story = result.rows[0];
-    if (!story) return res.status(404).send("Story not found.");
+const getPublishedStory = async (id, contentType) => {
+  const result = await pool.query(
+    `SELECT id, title, summary, image_url, content_type
+     FROM news_articles
+     WHERE id = $1 AND content_type = $2 AND status = 'published'
+     LIMIT 1`,
+    [id, contentType],
+  );
+  return result.rows[0];
+};
 
-    const frontendUrl = (process.env.FRONTEND_URL || "https://chinlungtoday.com").replace(/\/$/, "");
-    const readablePart = String(story.slug || story.title || "story")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .split("-")
-      .filter(Boolean)
-      .slice(0, 4)
-      .join("-") || "story";
-    const storyPath = story.content_type === "article" ? "a" : "n";
-    const destination = `${frontendUrl}/#/${storyPath}/${readablePart}-p${story.id}`;
-    const shareUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
-    const image = story.image_url?.startsWith("http")
-      ? story.image_url
-      : `${frontendUrl}/chinlung-today-logo.png`;
-    const title = escapeHtml(story.title);
-    const description = escapeHtml(story.summary);
+const publicStoryUrl = (story) => `${publicSiteUrl}/${story.content_type === "article" ? "articles" : "news"}/${story.id}`;
 
-    res.type("html").send(`<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} | Chinlung Today</title>
+const storyMetadata = (story) => {
+  const canonicalUrl = publicStoryUrl(story);
+  const title = escapeHtml(story.title);
+  const description = escapeHtml(story.summary || story.title);
+  const image = story.image_url?.startsWith("http")
+    ? story.image_url
+    : `${publicSiteUrl}/chinlung-today-logo.png`;
+
+  return `<title>${title} | Chinlung Today</title>
 <meta name="description" content="${description}">
+<link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Chinlung Today">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
 <meta property="og:image" content="${escapeHtml(image)}">
 <meta property="og:image:secure_url" content="${escapeHtml(image)}">
-<meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="${title}">
-<meta property="og:url" content="${escapeHtml(shareUrl)}">
+<meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
-<meta name="twitter:image" content="${escapeHtml(image)}">
+<meta name="twitter:image" content="${escapeHtml(image)}">`;
+};
+
+const removeDefaultMetadata = (html) => html
+  .replace(/<title>[\s\S]*?<\/title>/gi, "")
+  .replace(/<meta\s+name=["']description["'][^>]*>/gi, "")
+  .replace(/<meta\s+property=["']og:[^"']+["'][^>]*>/gi, "")
+  .replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, "")
+  .replace(/<link\s+rel=["']canonical["'][^>]*>/gi, "");
+
+app.get("/public/:section/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const contentType = req.params.section === "articles" ? "article" : req.params.section === "news" ? "news" : null;
+    if (!contentType || !Number.isInteger(id) || id < 1) return res.status(404).send("Story not found.");
+
+    const story = await getPublishedStory(id, contentType);
+    if (!story) return res.status(404).send("Story not found.");
+
+    const shellUrl = `${(process.env.FRONTEND_SHELL_URL || publicSiteUrl).replace(/\/$/, "")}/index.html`;
+    const shellResponse = await fetch(shellUrl);
+    if (!shellResponse.ok) throw new Error(`Could not load frontend shell (${shellResponse.status}).`);
+
+    const shell = removeDefaultMetadata(await shellResponse.text());
+    const html = shell.replace("</head>", `${storyMetadata(story)}\n</head>`);
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+    return res.type("html").send(html);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get("/share/:kind/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const contentType = req.params.kind === "a" ? "article" : "news";
+    if (!Number.isInteger(id) || id < 1) return res.status(404).send("Story not found.");
+
+    const story = await getPublishedStory(id, contentType);
+    if (!story) return res.status(404).send("Story not found.");
+
+    const destination = publicStoryUrl(story);
+    const title = escapeHtml(story.title);
+
+    res.type("html").send(`<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+${storyMetadata(story)}
 </head><body><p>Opening <a href="${escapeHtml(destination)}">${title}</a>…</p>
 <script>window.location.replace(${JSON.stringify(destination)});</script>
 <noscript><p><a href="${escapeHtml(destination)}">Read this story on Chinlung Today</a></p></noscript></body></html>`);
