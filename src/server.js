@@ -46,7 +46,6 @@ const escapeHtml = (value = "") => String(value)
   .replaceAll("'", "&#039;");
 
 const publicSiteUrl = (process.env.PUBLIC_SITE_URL || "https://chinlungtoday.com").replace(/\/$/, "");
-const backendPublicUrl = (process.env.BACKEND_PUBLIC_URL || "https://chinlung-news-backend.onrender.com").replace(/\/$/, "");
 
 const sectionConfig = {
   news: { contentType: "news", excludedCategories: ["Sports", "Business", "Editorial"] },
@@ -106,7 +105,7 @@ const transformedImageUrl = (imageUrl) => {
 };
 
 const socialImageUrl = (story) => isManagedCloudinaryImage(story.image_url)
-  ? `${backendPublicUrl}/social-image/${storySection(story)}/${story.slug || story.id}.jpg`
+  ? `${publicSiteUrl}/social-image/${storySection(story)}/${story.slug || story.id}.jpg`
   : transformedImageUrl(story.image_url);
 
 const storyMetadata = (story) => {
