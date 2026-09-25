@@ -46,6 +46,7 @@ const escapeHtml = (value = "") => String(value)
   .replaceAll("'", "&#039;");
 
 const publicSiteUrl = (process.env.PUBLIC_SITE_URL || "https://chinlungtoday.com").replace(/\/$/, "");
+const backendPublicUrl = (process.env.BACKEND_PUBLIC_URL || "https://chinlung-news-backend.onrender.com").replace(/\/$/, "");
 
 const sectionConfig = {
   news: { contentType: "news", excludedCategories: ["Sports", "Business", "Editorial"] },
@@ -84,21 +85,36 @@ const storySection = (story) => {
 
 const publicStoryUrl = (story) => `${publicSiteUrl}/${storySection(story)}/${story.slug || story.id}`;
 
-const socialImageUrl = (imageUrl) => {
+const isManagedCloudinaryImage = (imageUrl) => {
+  try {
+    const url = new URL(imageUrl);
+    return url.protocol === "https:"
+      && url.hostname === "res.cloudinary.com"
+      && url.pathname.startsWith("/id4hu8yk/image/upload/");
+  } catch {
+    return false;
+  }
+};
+
+const transformedImageUrl = (imageUrl) => {
   if (!imageUrl?.startsWith("http")) return `${publicSiteUrl}/chinlung-today-logo.png`;
-  if (!imageUrl.includes("res.cloudinary.com") || !imageUrl.includes("/image/upload/")) return imageUrl;
+  if (!isManagedCloudinaryImage(imageUrl)) return imageUrl;
   return imageUrl.replace(
     "/image/upload/",
     "/image/upload/c_fill,g_auto,w_1200,h_630,f_jpg,q_auto/",
   );
 };
 
+const socialImageUrl = (story) => isManagedCloudinaryImage(story.image_url)
+  ? `${backendPublicUrl}/social-image/${storySection(story)}/${story.slug || story.id}.jpg`
+  : transformedImageUrl(story.image_url);
+
 const storyMetadata = (story) => {
   const canonicalUrl = publicStoryUrl(story);
   const title = escapeHtml(story.title);
   const description = escapeHtml(story.summary || story.title);
-  const image = socialImageUrl(story.image_url);
-  const cloudinaryImageMetadata = image.includes("res.cloudinary.com")
+  const image = socialImageUrl(story);
+  const imageMetadata = isManagedCloudinaryImage(story.image_url)
     ? `<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">`
@@ -113,7 +129,7 @@ const storyMetadata = (story) => {
 <meta property="og:description" content="${description}">
 <meta property="og:image" content="${escapeHtml(image)}">
 <meta property="og:image:secure_url" content="${escapeHtml(image)}">
-${cloudinaryImageMetadata}
+${imageMetadata}
 <meta property="og:image:alt" content="${title}">
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta name="twitter:card" content="summary_large_image">
@@ -128,6 +144,31 @@ const removeDefaultMetadata = (html) => html
   .replace(/<meta\s+property=["']og:[^"']+["'][^>]*>/gi, "")
   .replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, "")
   .replace(/<link\s+rel=["']canonical["'][^>]*>/gi, "");
+
+app.get("/social-image/:section/:identifier", async (req, res, next) => {
+  try {
+    const config = sectionConfig[req.params.section];
+    const identifier = String(req.params.identifier || "").replace(/\.jpg$/i, "").trim();
+    if (!config || !identifier) return res.status(404).send("Story image not found.");
+
+    const story = await getPublishedStory(identifier, config.contentType, config);
+    if (!story) return res.status(404).send("Story image not found.");
+    if (!isManagedCloudinaryImage(story.image_url)) return res.status(404).send("Story image is not managed by Chinlung Today.");
+
+    const imageResponse = await fetch(transformedImageUrl(story.image_url));
+    if (!imageResponse.ok) throw new Error(`Could not load social image (${imageResponse.status}).`);
+
+    const image = Buffer.from(await imageResponse.arrayBuffer());
+    res.set({
+      "Cache-Control": "public, max-age=2592000, immutable",
+      "Content-Type": imageResponse.headers.get("content-type") || "image/jpeg",
+      "Content-Length": String(image.length),
+    });
+    return res.send(image);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 app.get("/public/:section/:identifier", async (req, res, next) => {
   try {
