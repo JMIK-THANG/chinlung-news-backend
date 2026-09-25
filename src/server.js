@@ -47,18 +47,42 @@ const escapeHtml = (value = "") => String(value)
 
 const publicSiteUrl = (process.env.PUBLIC_SITE_URL || "https://chinlungtoday.com").replace(/\/$/, "");
 
-const getPublishedStory = async (id, contentType) => {
+const sectionConfig = {
+  news: { contentType: "news", excludedCategories: ["Sports", "Business", "Editorial"] },
+  sports: { contentType: "news", category: "Sports" },
+  business: { contentType: "news", category: "Business" },
+  editorial: { contentType: "news", category: "Editorial" },
+  articles: { contentType: "article", excludedCategories: ["Cahram"] },
+  cahram: { contentType: "article", category: "Cahram" },
+};
+
+const getPublishedStory = async (identifier, contentType, { category, excludedCategories = [] } = {}) => {
+  const values = [String(identifier), contentType];
+  let categoryClause = "";
+  if (category) {
+    values.push(category);
+    categoryClause = ` AND category = $${values.length}`;
+  } else if (excludedCategories.length) {
+    values.push(excludedCategories);
+    categoryClause = ` AND NOT (category = ANY($${values.length}))`;
+  }
   const result = await pool.query(
-    `SELECT id, title, summary, image_url, content_type
+    `SELECT id, slug, title, summary, image_url, content_type, category
      FROM news_articles
-     WHERE id = $1 AND content_type = $2 AND status = 'published'
+     WHERE (slug = $1 OR id::text = $1) AND content_type = $2${categoryClause} AND status = 'published'
      LIMIT 1`,
-    [id, contentType],
+    values,
   );
   return result.rows[0];
 };
 
-const publicStoryUrl = (story) => `${publicSiteUrl}/${story.content_type === "article" ? "articles" : "news"}/${story.id}`;
+const storySection = (story) => {
+  if (story.content_type === "article") return story.category === "Cahram" ? "cahram" : "articles";
+  if (["Sports", "Business", "Editorial"].includes(story.category)) return story.category.toLowerCase();
+  return "news";
+};
+
+const publicStoryUrl = (story) => `${publicSiteUrl}/${storySection(story)}/${story.slug || story.id}`;
 
 const socialImageUrl = (imageUrl) => {
   if (!imageUrl?.startsWith("http")) return `${publicSiteUrl}/chinlung-today-logo.png`;
@@ -105,13 +129,13 @@ const removeDefaultMetadata = (html) => html
   .replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, "")
   .replace(/<link\s+rel=["']canonical["'][^>]*>/gi, "");
 
-app.get("/public/:section/:id", async (req, res, next) => {
+app.get("/public/:section/:identifier", async (req, res, next) => {
   try {
-    const id = Number(req.params.id);
-    const contentType = req.params.section === "articles" ? "article" : req.params.section === "news" ? "news" : null;
-    if (!contentType || !Number.isInteger(id) || id < 1) return res.status(404).send("Story not found.");
+    const config = sectionConfig[req.params.section];
+    const identifier = String(req.params.identifier || "").trim();
+    if (!config || !identifier) return res.status(404).send("Story not found.");
 
-    const story = await getPublishedStory(id, contentType);
+    const story = await getPublishedStory(identifier, config.contentType, config);
     if (!story) return res.status(404).send("Story not found.");
 
     const shellUrl = `${(process.env.FRONTEND_SHELL_URL || publicSiteUrl).replace(/\/$/, "")}/index.html`;
