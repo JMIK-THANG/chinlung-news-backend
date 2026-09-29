@@ -54,6 +54,30 @@ set `PUBLIC_SITE_URL` to override that canonical public origin and
 `FRONTEND_SHELL_URL` if the frontend HTML shell is served from a different
 origin. Neither setting changes the API URL used by the frontend.
 
+### Production SEO routing
+
+The backend generates current XML at `/sitemap.xml` from published database
+content and crawler metadata for public story routes. On the Render Static Site,
+add a **Rewrite** (not a redirect) so the public URL stays on the production
+domain:
+
+```text
+Source:      /sitemap.xml
+Destination: https://chinlung-news-backend.onrender.com/sitemap.xml
+Action:      Rewrite
+```
+
+Keep the existing public story rewrites pointed at `/public/:section/:id` on
+the backend. Set these backend environment variables in production:
+
+```env
+PUBLIC_SITE_URL=https://chinlungtoday.com
+FRONTEND_SHELL_URL=https://chinlungtoday.com
+```
+
+The frontend publishes `/robots.txt`, which references
+`https://chinlungtoday.com/sitemap.xml` and excludes `/admin` from crawling.
+
 Never commit `.env` because it contains your database password.
 
 ## 4. Create your first admin

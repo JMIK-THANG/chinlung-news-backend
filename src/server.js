@@ -45,6 +45,9 @@ const escapeHtml = (value = "") => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
+const escapeXml = (value = "") => escapeHtml(value);
+const safeJsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
+
 const publicSiteUrl = (process.env.PUBLIC_SITE_URL || "https://chinlungtoday.com").replace(/\/$/, "");
 
 const sectionConfig = {
@@ -67,7 +70,8 @@ const getPublishedStory = async (identifier, contentType, { category, excludedCa
     categoryClause = ` AND NOT (category = ANY($${values.length}))`;
   }
   const result = await pool.query(
-    `SELECT id, slug, title, summary, image_url, content_type, category
+    `SELECT id, slug, title, summary, author, image_url, image_alt, content_type, category,
+            published_at, updated_at
      FROM news_articles
      WHERE (slug = $1 OR id::text = $1) AND content_type = $2${categoryClause} AND status = 'published'
      LIMIT 1`,
@@ -108,7 +112,7 @@ const socialImageUrl = (story) => isManagedCloudinaryImage(story.image_url)
   ? `${publicSiteUrl}/social-image/${storySection(story)}/${story.slug || story.id}.jpg`
   : transformedImageUrl(story.image_url);
 
-const storyMetadata = (story) => {
+const storyMetadata = (story, { robots = "index, follow" } = {}) => {
   const canonicalUrl = publicStoryUrl(story);
   const title = escapeHtml(story.title);
   const description = escapeHtml(story.summary || story.title);
@@ -118,9 +122,26 @@ const storyMetadata = (story) => {
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">`
     : "";
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": story.content_type === "news" ? "NewsArticle" : "Article",
+    headline: story.title,
+    description: story.summary || story.title,
+    ...(story.image_url ? { image: [image] } : {}),
+    ...(story.published_at ? { datePublished: new Date(story.published_at).toISOString() } : {}),
+    ...(story.updated_at ? { dateModified: new Date(story.updated_at).toISOString() } : {}),
+    ...(story.author ? { author: { "@type": "Person", name: story.author } } : {}),
+    publisher: {
+      "@type": "NewsMediaOrganization",
+      name: "Chinlung Today",
+      logo: { "@type": "ImageObject", url: `${publicSiteUrl}/chinlung-today-logo.png` },
+    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+  };
 
   return `<title>${title} | Chinlung Today</title>
 <meta name="description" content="${description}">
+<meta name="robots" content="${escapeHtml(robots)}">
 <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Chinlung Today">
@@ -134,7 +155,11 @@ ${imageMetadata}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
-<meta name="twitter:image" content="${escapeHtml(image)}">`;
+<meta name="twitter:image" content="${escapeHtml(image)}">
+${story.published_at ? `<meta property="article:published_time" content="${escapeHtml(new Date(story.published_at).toISOString())}">` : ""}
+${story.updated_at ? `<meta property="article:modified_time" content="${escapeHtml(new Date(story.updated_at).toISOString())}">` : ""}
+<meta property="article:section" content="${escapeHtml(story.category)}">
+<script type="application/ld+json" id="page-jsonld">${safeJsonLd(schema)}</script>`;
 };
 
 const removeDefaultMetadata = (html) => html
@@ -142,7 +167,45 @@ const removeDefaultMetadata = (html) => html
   .replace(/<meta\s+name=["']description["'][^>]*>/gi, "")
   .replace(/<meta\s+property=["']og:[^"']+["'][^>]*>/gi, "")
   .replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, "")
+  .replace(/<meta\s+name=["']robots["'][^>]*>/gi, "")
   .replace(/<link\s+rel=["']canonical["'][^>]*>/gi, "");
+
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(`User-agent: *\nAllow: /\nDisallow: /admin\n\nSitemap: ${publicSiteUrl}/sitemap.xml\n`);
+});
+
+app.get("/sitemap.xml", async (_req, res, next) => {
+  try {
+    const [storiesResult, explainersResult] = await Promise.all([
+      pool.query(`SELECT id, slug, content_type, category, updated_at, published_at
+                  FROM news_articles WHERE status = 'published'
+                  ORDER BY published_at DESC NULLS LAST`),
+      pool.query("SELECT slug, updated_at, created_at FROM explainers ORDER BY updated_at DESC"),
+    ]);
+    const staticPaths = [
+      "/", "/news", "/news/category/chin", "/news/category/myanmar",
+      "/news/category/international", "/sports", "/business", "/editorial",
+      "/articles", "/articles/category/news-articles", "/articles/category/cahram",
+      "/podcasts", "/about", "/contact", "/privacy",
+    ];
+    const entries = [
+      ...staticPaths.map((path) => ({ url: `${publicSiteUrl}${path === "/" ? "/" : path}` })),
+      ...storiesResult.rows.map((story) => ({
+        url: publicStoryUrl(story),
+        modified: story.updated_at || story.published_at,
+      })),
+      ...explainersResult.rows.map((explainer) => ({
+        url: `${publicSiteUrl}/explainers/${explainer.slug}`,
+        modified: explainer.updated_at || explainer.created_at,
+      })),
+    ];
+    const body = entries.map(({ url, modified }) => `  <url>\n    <loc>${escapeXml(url)}</loc>${modified ? `\n    <lastmod>${new Date(modified).toISOString()}</lastmod>` : ""}\n  </url>`).join("\n");
+    res.set("Cache-Control", "public, max-age=300, s-maxage=3600");
+    return res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 app.get("/social-image/:section/:identifier", async (req, res, next) => {
   try {
@@ -207,7 +270,7 @@ app.get("/share/:kind/:id", async (req, res, next) => {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-${storyMetadata(story)}
+${storyMetadata(story, { robots: "noindex, follow" })}
 </head><body><p>Opening <a href="${escapeHtml(destination)}">${title}</a>…</p>
 <script>window.location.replace(${JSON.stringify(destination)});</script>
 <noscript><p><a href="${escapeHtml(destination)}">Read this story on Chinlung Today</a></p></noscript></body></html>`);
