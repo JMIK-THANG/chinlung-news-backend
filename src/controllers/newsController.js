@@ -335,7 +335,7 @@ export async function getNewsBySlug(req, res, next) {
     const identifier = compactId || req.params.slug;
     const result = await pool.query(
       `UPDATE news_articles
-       SET views = views + 1, updated_at = NOW()
+       SET views = views + 1
        WHERE (slug = $1 OR id::text = $1) AND status = 'published'
        RETURNING *`,
       [identifier],
