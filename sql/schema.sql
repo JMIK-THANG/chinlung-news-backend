@@ -86,6 +86,24 @@ CREATE TABLE IF NOT EXISTS explainers (
 
 CREATE INDEX IF NOT EXISTS explainers_featured_index ON explainers (is_featured);
 
+CREATE TABLE IF NOT EXISTS podcast_episodes (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title VARCHAR(220) NOT NULL,
+  description TEXT NOT NULL,
+  presenter VARCHAR(120) NOT NULL DEFAULT 'Chinlung Today',
+  video_url TEXT NOT NULL,
+  video_public_id TEXT,
+  thumbnail_url TEXT,
+  thumbnail_public_id TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published')),
+  published_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS podcast_episodes_published_at_index
+  ON podcast_episodes (published_at DESC);
+
 UPDATE news_articles SET
   title = REPLACE(REPLACE(REPLACE(title, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
   summary = REPLACE(REPLACE(REPLACE(summary, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),

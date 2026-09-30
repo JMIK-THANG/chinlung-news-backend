@@ -6,6 +6,7 @@ import newsRoutes from "./routes/newsRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import explainerRoutes from "./routes/explainerRoutes.js";
+import podcastRoutes from "./routes/podcastRoutes.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -27,7 +28,7 @@ app.use(cors({
 }));
 // A modestly larger limit allows the prototype admin to submit a compressed
 // image selected from the computer as a data URL.
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: "70mb" }));
 
 app.get("/api/health", async (_req, res, next) => {
   try {
@@ -283,6 +284,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/explainers", explainerRoutes);
+app.use("/api/podcasts", podcastRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);
