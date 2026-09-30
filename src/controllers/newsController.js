@@ -119,6 +119,7 @@ export async function createNews(req, res, next) {
 
 export async function getNews(req, res, next) {
   try {
+    res.set("Cache-Control", "no-store");
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const category = req.query.category;
     const contentType = req.query.type || "news";
@@ -331,11 +332,12 @@ export async function deleteNews(req, res, next) {
 
 export async function getNewsBySlug(req, res, next) {
   try {
+    res.set("Cache-Control", "no-store");
     const compactId = req.params.slug.match(/-p(\d+)$/)?.[1];
     const identifier = compactId || req.params.slug;
     const result = await pool.query(
       `UPDATE news_articles
-       SET views = views + 1
+       SET views = COALESCE(views, 0) + 1
        WHERE (slug = $1 OR id::text = $1) AND status = 'published'
        RETURNING *`,
       [identifier],
