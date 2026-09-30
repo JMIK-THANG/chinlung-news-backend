@@ -1,7 +1,7 @@
 import cloudinary, { cloudinaryIsConfigured } from "../config/cloudinary.js";
 import pool from "../db.js";
 
-const selectEpisode = `SELECT id, title, description, presenter, video_url, video_public_id,
+const selectEpisode = `SELECT id, title, description, presenter, video_url, video_public_id, youtube_url, youtube_id,
   thumbnail_url, thumbnail_public_id, status, published_at, created_at, updated_at
   FROM podcast_episodes`;
 
@@ -26,13 +26,14 @@ export async function getAdminPodcasts(_req, res, next) {
 
 export async function createPodcast(req, res, next) {
   try {
-    const { title, description, presenter = "Chinlung Today", videoUrl, videoPublicId = null, thumbnailUrl = null, thumbnailPublicId = null, status = "published" } = req.body;
-    if (!title?.trim() || !description?.trim() || !videoUrl?.trim()) return res.status(400).json({ message: "Title, description, and video are required." });
+    const { title, description, presenter = "Chinlung Today", videoUrl = null, videoPublicId = null, youtubeUrl = null, youtubeId = null, thumbnailUrl = null, thumbnailPublicId = null, status = "published" } = req.body;
+    if (!title?.trim() || !description?.trim() || (!videoUrl?.trim() && !youtubeId?.trim())) return res.status(400).json({ message: "Title, description, and a YouTube link or uploaded video are required." });
+    if (youtubeId && !/^[\w-]{6,20}$/.test(youtubeId)) return res.status(400).json({ message: "Please enter a valid YouTube video link." });
     if (!["draft", "published"].includes(status)) return res.status(400).json({ message: "Status must be draft or published." });
     const result = await pool.query(
-      `INSERT INTO podcast_episodes (title, description, presenter, video_url, video_public_id, thumbnail_url, thumbnail_public_id, status, published_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [title.trim(), description.trim(), presenter.trim() || "Chinlung Today", videoUrl, videoPublicId, thumbnailUrl, thumbnailPublicId, status, status === "published" ? new Date() : null],
+      `INSERT INTO podcast_episodes (title, description, presenter, video_url, video_public_id, youtube_url, youtube_id, thumbnail_url, thumbnail_public_id, status, published_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [title.trim(), description.trim(), presenter.trim() || "Chinlung Today", videoUrl || null, videoPublicId, youtubeUrl || null, youtubeId || null, thumbnailUrl, thumbnailPublicId, status, status === "published" ? new Date() : null],
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {

@@ -91,8 +91,10 @@ CREATE TABLE IF NOT EXISTS podcast_episodes (
   title VARCHAR(220) NOT NULL,
   description TEXT NOT NULL,
   presenter VARCHAR(120) NOT NULL DEFAULT 'Chinlung Today',
-  video_url TEXT NOT NULL,
+  video_url TEXT,
   video_public_id TEXT,
+  youtube_url TEXT,
+  youtube_id VARCHAR(32),
   thumbnail_url TEXT,
   thumbnail_public_id TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published')),
@@ -103,6 +105,10 @@ CREATE TABLE IF NOT EXISTS podcast_episodes (
 
 CREATE INDEX IF NOT EXISTS podcast_episodes_published_at_index
   ON podcast_episodes (published_at DESC);
+
+ALTER TABLE podcast_episodes ALTER COLUMN video_url DROP NOT NULL;
+ALTER TABLE podcast_episodes ADD COLUMN IF NOT EXISTS youtube_url TEXT;
+ALTER TABLE podcast_episodes ADD COLUMN IF NOT EXISTS youtube_id VARCHAR(32);
 
 UPDATE news_articles SET
   title = REPLACE(REPLACE(REPLACE(title, 'HOLH', 'TONG'), 'Holh', 'Tong'), 'holh', 'tong'),
