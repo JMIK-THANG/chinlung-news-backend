@@ -140,7 +140,7 @@ export async function getNews(req, res, next) {
     const result = await pool.query(
       `SELECT * FROM news_articles
        ${where}
-       ORDER BY published_at DESC
+       ORDER BY ${req.query.editorPicks === "true" ? "is_editor_pick DESC, CASE WHEN is_editor_pick THEN updated_at END DESC NULLS LAST," : ""} published_at DESC
        LIMIT $${values.length}`,
       values,
     );
