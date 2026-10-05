@@ -373,7 +373,7 @@ export async function getRelatedNews(req, res, next) {
        ORDER BY
          CASE WHEN category = $2 THEN 0 ELSE 1 END,
          published_at DESC NULLS LAST
-       LIMIT 3`,
+       LIMIT 5`,
       [currentArticle.id, currentArticle.category],
     );
 
