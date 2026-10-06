@@ -7,6 +7,7 @@ import authRoutes from "./routes/authRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import explainerRoutes from "./routes/explainerRoutes.js";
 import podcastRoutes from "./routes/podcastRoutes.js";
+import contactRoutes from "./routes/contactRoutes.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -285,6 +286,7 @@ app.use("/api/uploads", uploadRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/explainers", explainerRoutes);
 app.use("/api/podcasts", podcastRoutes);
+app.use("/api/contact", contactRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);
